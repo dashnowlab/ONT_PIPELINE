@@ -2,6 +2,20 @@
 
 ONT pipelines for alignment, human-variation analysis, structural variants, and tandem repeats.
 
+## Alignment and human variation
+
+Submit alignment with a directory containing ONT FASTQ files:
+
+```bash
+sbatch ont_alignment.sh /path/to/sample_directory
+```
+
+After alignment finishes, submit human-variation analysis with its BAM output:
+
+```bash
+sbatch ont_human_variation.sh /path/to/aligned.bam
+```
+
 Run the primary SV/TR workflows from the repository root, for example:
 
 ```bash
