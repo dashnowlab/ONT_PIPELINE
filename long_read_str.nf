@@ -8,7 +8,7 @@ params.help              = params.containsKey('help')              ? params.help
 params.bam_list          = params.containsKey('bam_list')          ? params.bam_list          : null
 params.work_dir          = params.containsKey('work_dir')          ? params.work_dir          : "${workDir}"
 params.projectname       = params.containsKey('projectname')       ? params.projectname       : "str_project"
-params.ref               = params.containsKey('ref')               ? params.ref               : "/gpfs/data_jrnas1/ref_data/Hsapiens/hg38/ONT/hg38_nohla.fa"
+params.ref               = params.containsKey('ref')               ? params.ref               : "/pl/active/dashnowlab/data/ref-genomes/human_GRCh38_no_alt_analysis_set.fasta"
 params.base_dir          = params.containsKey('base_dir')          ? params.base_dir          : null
 params.caller            = params.containsKey('caller')            ? params.caller            : "atarva"   // atarva | longtr | longtr_chrom | strdust | medaka
 

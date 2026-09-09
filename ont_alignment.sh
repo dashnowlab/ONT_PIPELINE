@@ -6,8 +6,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
-#SBATCH --output=/scratch/alpine/ealiyev@xsede.org/data/slurm_logs/%x_%j.out
-#SBATCH --error=/scratch/alpine/ealiyev@xsede.org/data/slurm_logs/%x_%j.err
+#SBATCH --output=%x_%j.out
+#SBATCH --error=%x_%j.err
 
 set -euo pipefail
 
@@ -15,21 +15,81 @@ set -euo pipefail
 # Usage
 #
 # sbatch ont_alignment.sh \
-#   /p/archive/dashnowlab-archive/shaikh-ONT/New_Samples_July2025/OMLR24-036
+#   --sample-dir /path/to/fastq_directory \
+#   --reference /path/to/reference.fasta \
+#   --output-dir /path/to/output \
+#   --threads 16
 ###############################################################################
 
-if [[ $# -ne 1 ]]; then
-    echo "Usage:"
-    echo "  sbatch $0 /path/to/sample_directory"
-    exit 1
-fi
+usage() {
+    cat <<EOF
+Usage:
+  sbatch $0 --sample-dir DIR --reference FASTA --output-dir DIR [--threads N]
+
+Required:
+  --sample-dir DIR    Directory containing ONT FASTQ files
+  --reference FASTA  Reference genome FASTA
+  --output-dir DIR   Root directory for results, work files, and caches
+
+Optional:
+  --threads N        Alignment threads (default: 16)
+  -h, --help         Show this help message
+EOF
+}
 
 ###############################################################################
 # Input
 ###############################################################################
 
-SAMPLE_DIR=$(realpath "$1")
-SAMPLE_NAME=$(basename "$SAMPLE_DIR")
+SAMPLE_DIR=""
+REFERENCE_FASTA=""
+OUTPUT_DIR=""
+ALIGNMENT_THREADS=16
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --sample-dir)
+            [[ $# -ge 2 ]] || { echo "ERROR: --sample-dir requires a value" >&2; exit 1; }
+            SAMPLE_DIR="$2"
+            shift 2
+            ;;
+        --reference)
+            [[ $# -ge 2 ]] || { echo "ERROR: --reference requires a value" >&2; exit 1; }
+            REFERENCE_FASTA="$2"
+            shift 2
+            ;;
+        --output-dir)
+            [[ $# -ge 2 ]] || { echo "ERROR: --output-dir requires a value" >&2; exit 1; }
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --threads)
+            [[ $# -ge 2 ]] || { echo "ERROR: --threads requires a value" >&2; exit 1; }
+            ALIGNMENT_THREADS="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "ERROR: unknown argument: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -z "$SAMPLE_DIR" || -z "$REFERENCE_FASTA" || -z "$OUTPUT_DIR" ]]; then
+    echo "ERROR: --sample-dir, --reference, and --output-dir are required" >&2
+    usage >&2
+    exit 1
+fi
+
+if [[ ! "$ALIGNMENT_THREADS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERROR: --threads must be a positive integer" >&2
+    exit 1
+fi
 
 if [[ ! -d "$SAMPLE_DIR" ]]; then
     echo "ERROR: Sample directory does not exist:"
@@ -37,23 +97,26 @@ if [[ ! -d "$SAMPLE_DIR" ]]; then
     exit 1
 fi
 
+if [[ ! -f "$REFERENCE_FASTA" ]]; then
+    echo "ERROR: Reference FASTA does not exist:"
+    echo "  $REFERENCE_FASTA"
+    exit 1
+fi
+
+SAMPLE_DIR=$(realpath "$SAMPLE_DIR")
+REFERENCE_FASTA=$(realpath "$REFERENCE_FASTA")
+SAMPLE_ROOT=$(realpath -m "$OUTPUT_DIR")
+SAMPLE_NAME=$(basename "$SAMPLE_DIR")
+
 ###############################################################################
 # Main settings
 ###############################################################################
 
-SCRATCH_ROOT="/scratch/alpine/ealiyev@xsede.org/data"
-
-REFERENCE_FASTA="/pl/active/dashnowlab/data/ref-genomes/human_GRCh38_no_alt_analysis_set.fasta"
-
 PIPELINE="epi2me-labs/wf-alignment"
-
-ALIGNMENT_THREADS=16
 
 ###############################################################################
 # Per-sample paths
 ###############################################################################
-
-SAMPLE_ROOT="${SCRATCH_ROOT}/${SAMPLE_NAME}"
 
 FASTQ_INPUT_DIR="${SAMPLE_ROOT}/fastq_input"
 REFERENCE_INPUT_DIR="${SAMPLE_ROOT}/reference_input"
@@ -69,23 +132,11 @@ RUN_CONFIG="${SAMPLE_ROOT}/nextflow.config"
 FASTQ_LIST="${SAMPLE_ROOT}/fastq_files.txt"
 
 ###############################################################################
-# Shared paths
+# Cache paths
 ###############################################################################
 
-LOG_DIR="${SCRATCH_ROOT}/slurm_logs"
-
-NEXTFLOW_SINGULARITY_CACHE="${SCRATCH_ROOT}/nextflow_singularity_images"
-SINGULARITY_OCI_CACHE="${SCRATCH_ROOT}/singularity_oci_cache"
-
-###############################################################################
-# Validate reference
-###############################################################################
-
-if [[ ! -f "$REFERENCE_FASTA" ]]; then
-    echo "ERROR: Reference FASTA does not exist:"
-    echo "  $REFERENCE_FASTA"
-    exit 1
-fi
+NEXTFLOW_SINGULARITY_CACHE="${SAMPLE_ROOT}/.cache/nextflow_singularity_images"
+SINGULARITY_OCI_CACHE="${SAMPLE_ROOT}/.cache/singularity_oci_cache"
 
 ###############################################################################
 # Initialize modules
@@ -127,7 +178,6 @@ mkdir -p \
     "$TMP_DIR" \
     "$NXF_HOME_DIR" \
     "$NXF_ASSETS_DIR" \
-    "$LOG_DIR" \
     "$NEXTFLOW_SINGULARITY_CACHE" \
     "$SINGULARITY_OCI_CACHE"
 
@@ -402,7 +452,7 @@ echo "Flat FASTQ directory:     $FASTQ_INPUT_DIR"
 echo "Reference FASTA:          $REFERENCE_FASTA"
 echo "Reference directory:      $REFERENCE_INPUT_DIR"
 echo "Alignment threads:        $ALIGNMENT_THREADS"
-echo "Sample scratch root:      $SAMPLE_ROOT"
+echo "Output root:              $SAMPLE_ROOT"
 echo "Results directory:        $RESULTS_DIR"
 echo "Nextflow work directory:  $WORK_DIR"
 echo "Temporary directory:      $TMP_DIR"
