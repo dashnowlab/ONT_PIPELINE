@@ -14,7 +14,7 @@ set -euo pipefail
 ###############################################################################
 # Usage
 #
-# sbatch /pl/active/dashnowlab/software/ONT_PIPELINE/ont_alignment.sh \
+# sbatch ont_alignment.sh \
 #   /p/archive/dashnowlab-archive/shaikh-ONT/New_Samples_July2025/OMLR24-036
 ###############################################################################
 

@@ -10,12 +10,12 @@ params.work_dir          = params.work_dir          ?: "${workDir}"
 params.projectname       = params.projectname       ?: "sv_project"
 params.ref               = params.ref               ?: "/gpfs/data_jrnas1/ref_data/Hsapiens/hg38/ONT/hg38_nohla.fa"
 params.tr_bed            = params.tr_bed            ?: "/gpfs/data_jrnas1/ref_data/Hsapiens/hg38/ONT/human_GRCh38_no_alt_analysis_set.trf.bed"
-params.software_path     = params.software_path     ?: "/pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/software/"
+params.software_path     = params.software_path     ?: projectDir
 params.caller            = params.caller            ?: "sniffles"   // sniffles | cutesv | severus
 
 params.sample_ids_xlsx   = params.sample_ids_xlsx   ?: ""
 params.acmg_gene_list    = params.acmg_gene_list    ?: "${params.software_path}/catalogs/ACMG_gene.list"
-params.python_script     = params.python_script     ?: "${projectDir}/prioritize_sv_results.py"
+params.python_script     = params.python_script     ?: "${projectDir}/scripts/prioritize_sv_results.py"
 params.python_libs       = params.python_libs       ?: "${params.software_path}/tools/python_libs"
 
 if (params.help) {
@@ -368,7 +368,7 @@ process ALLELE_FREQ {
     def proj = params.projectname
     def sw   = params.software_path
     """
-    python3 ${sw}/vcf_allele_freq.py ${id_vcf} > ${proj}.AF.vcf
+    python3 ${sw}/scripts/vcf_allele_freq.py ${id_vcf} > ${proj}.AF.vcf
     """
 }
 
@@ -512,13 +512,13 @@ process SVAFOTATE {
         --vcf  ${std_vcf} \\
         --out  ${proj}.sites.no_tra.std.SVA_Fotate.vcf \\
         -f 0.8 \\
-        -b ${sw}/SVAFotate_core_SV_popAFs.GRCh38.bed.gz
+        -b ${sw}/resources/sv/SVAFotate_core_SV_popAFs.GRCh38.bed.gz
 
     svafotate annotate \\
         --vcf  ${proj}.sites.no_tra.std.SVA_Fotate.vcf \\
         --out  ${proj}.sites.no_tra.std.SVA_Fotate.topmed.vcf \\
         -f 0.8 \\
-        -b ${sw}/TOPMed.GRCh38.bed.gz
+        -b ${sw}/resources/sv/TOPMed.GRCh38.bed.gz
     """
 }
 

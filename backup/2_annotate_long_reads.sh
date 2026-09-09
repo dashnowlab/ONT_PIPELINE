@@ -36,8 +36,8 @@ start_annotation_long_reads() {
 	java -jar -Xmx64G $software_path/htsSidra-1.2-jar-with-dependencies.jar processAnnotatedFileAnnotSV_3_8 $reports_path/population_final/$projectname.tsv;
 	grep -v "SVTYPE=TRA" $reports_path/population_final/$projectname.sites.vcf > $reports_path/population_final/$projectname.sites.no_tra.vcf;
 	svtk standardize --contigs $contigs_data --include-reference-sites $reports_path/population_final/$projectname.sites.no_tra.vcf $reports_path/population_final/$projectname.sites.no_tra.std.vcf manta;
-	svafotate annotate --vcf $reports_path/population_final/$projectname.sites.no_tra.std.vcf --out $reports_path/population_final/$projectname.sites.no_tra.std.SVA_Fotate.vcf -f 0.8 -b $software_path/SVAFotate_core_SV_popAFs.GRCh38.bed.gz;
-	svafotate annotate --vcf $reports_path/population_final/$projectname.sites.no_tra.std.SVA_Fotate.vcf --out $reports_path/population_final/$projectname.sites.no_tra.std.SVA_Fotate.topmed.vcf -f 0.8 -b $software_path/TOPMed.GRCh38.bed.gz;
+	svafotate annotate --vcf $reports_path/population_final/$projectname.sites.no_tra.std.vcf --out $reports_path/population_final/$projectname.sites.no_tra.std.SVA_Fotate.vcf -f 0.8 -b $software_path/resources/sv/SVAFotate_core_SV_popAFs.GRCh38.bed.gz;
+	svafotate annotate --vcf $reports_path/population_final/$projectname.sites.no_tra.std.SVA_Fotate.vcf --out $reports_path/population_final/$projectname.sites.no_tra.std.SVA_Fotate.topmed.vcf -f 0.8 -b $software_path/resources/sv/TOPMed.GRCh38.bed.gz;
 	gatk SVAnnotate -V $reports_path/population_final/$projectname.sites.no_tra.std.SVA_Fotate.topmed.vcf --protein-coding-gtf $software_path/gencode_new_38.gtf -O $reports_path/population_final/$projectname.sites.no_tra.std.annotated.vcf;
 	svtk vcf2bed --info ALL $reports_path/population_final/$projectname.sites.no_tra.std.annotated.vcf $reports_path/population_final/$projectname.sites.no_tra.std.annotated.bed;
 	bcftools query -f "%CHROM\t%POS\t%INFO/END\t%INFO/SVTYPE\t%INFO/SVLEN\t%ID\n" $reports_path/population_final/$projectname.AF.vcf >> $reports_path/population_final/$projectname.bed;

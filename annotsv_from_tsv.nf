@@ -4,7 +4,7 @@ nextflow.enable.dsl = 2
 
 params.input_tsv     = params.input_tsv     ?: null
 params.work_dir      = params.work_dir      ?: launchDir
-params.software_path = params.software_path ?: '/pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/software'
+params.software_path = params.software_path ?: projectDir
 
 if (!params.input_tsv) {
     error 'Missing required parameter: --input_tsv <file.tsv>'

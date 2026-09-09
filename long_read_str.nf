@@ -13,7 +13,7 @@ params.base_dir          = params.containsKey('base_dir')          ? params.base
 params.caller            = params.containsKey('caller')            ? params.caller            : "atarva"   // atarva | longtr | longtr_chrom | strdust | medaka
 
 // Software root
-params.software_dir      = params.containsKey('software_dir')      ? params.software_dir      : "/pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/software/"
+params.software_dir      = params.containsKey('software_dir')      ? params.software_dir      : projectDir
 
 // Catalogs / resources
 //params.atarva_bed        = params.atarva_bed        ?: "${params.software_dir}/catalogs/STRchive-disease-loci.hg38.atarva.bed.gz"
@@ -39,10 +39,10 @@ params.atarva_conda      = params.containsKey('atarva_conda')      ? params.atar
 params.stranno_bin       = params.containsKey('stranno_bin')       ? params.stranno_bin       : "${params.software_dir}/tools/stranno-linux-x86_64-static_0.3.0"
 params.annotsv_bin       = params.containsKey('annotsv_bin')       ? params.annotsv_bin       : "${params.software_dir}/tools/AnnotSV/bin/AnnotSV"
 params.htssidra_jar      = params.containsKey('htssidra_jar')      ? params.htssidra_jar      : "${params.software_dir}/tools/htsSidra-1.2-jar-with-dependencies.jar"
-params.z_score_script    = params.containsKey('z_score_script')    ? params.z_score_script    : "${params.software_dir}/z_score_regularized_final.py"
-params.vcf_to_bed_script = params.containsKey('vcf_to_bed_script') ? params.vcf_to_bed_script : "${params.software_dir}/vcf_to_bed.py"
-params.vcf_to_tsv_script = params.containsKey('vcf_to_tsv_script') ? params.vcf_to_tsv_script : "${params.software_dir}/vcf_to_tsv.py"
-params.left_join_script  = params.containsKey('left_join_script')  ? params.left_join_script  : "${params.software_dir}/left_join.py"
+params.z_score_script    = params.containsKey('z_score_script')    ? params.z_score_script    : "${params.software_dir}/scripts/z_score_regularized_final.py"
+params.vcf_to_bed_script = params.containsKey('vcf_to_bed_script') ? params.vcf_to_bed_script : "${params.software_dir}/scripts/vcf_to_bed.py"
+params.vcf_to_tsv_script = params.containsKey('vcf_to_tsv_script') ? params.vcf_to_tsv_script : "${params.software_dir}/scripts/vcf_to_tsv.py"
+params.left_join_script  = params.containsKey('left_join_script')  ? params.left_join_script  : "${params.software_dir}/scripts/left_join.py"
 
 if (params.help) {
     log.info """
@@ -72,7 +72,7 @@ if (params.help) {
 
     Note:
         For atarva, longtr, longtr_chrom, strdust and medaka, the pipeline also runs:
-        stranno -> z_score.py -> vcf_to_bed.py -> AnnotSV -> htsSidra -> vcf_to_tsv.py -> left_join.py
+        stranno -> z_score_regularized_final.py -> vcf_to_bed.py -> AnnotSV -> htsSidra -> vcf_to_tsv.py -> left_join.py
     """
     System.exit(0)
 }
@@ -504,7 +504,7 @@ process MEDAKA {
 process ANNOTATE {
     tag "${sample}"
 
-    container '/pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/software//containers/annotsv_3.5.8_biocontainers.sif'
+    container "${containerDir}/annotsv_3.5.8_biocontainers.sif"
 
     cpus 2
     memory { 8.GB * task.attempt }
@@ -636,7 +636,7 @@ process ANNOTATE {
         -includeCI 0 \\
         -overlap 80 \\
         -outputDir . \\
-        -annotationsDir /pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/software//tools/AnnotSV/share/AnnotSV/ \\
+        -annotationsDir ${params.software_dir}/tools/AnnotSV/share/AnnotSV/ \\
         -outputFile ${sample}.${caller_label}.annotated.tsv
 
     java -jar -Xmx16G ${params.htssidra_jar} \\

@@ -14,7 +14,7 @@ set -euo pipefail
 ###############################################################################
 # Usage
 #
-# sbatch /pl/active/dashnowlab/software/ONT_PIPELINE/ont_human_variation.sh \
+# sbatch ont_human_variation.sh \
 #   /path/to/sample.bam
 ###############################################################################
 
