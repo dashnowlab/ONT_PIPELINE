@@ -2,3 +2,19 @@ containers/*.sif
 tools/
 gencode_new.gtf
 gencode_new_38.gtf
+
+# Nextflow runtime
+.nextflow*
+work/
+logs/
+report-*.html
+
+# Generated annotation data
+catalogs/*.annotated.tsv
+catalogs/*.annotated.subset.tsv
+catalogs/*.tmp/
+catalogs/header.tsv
+
+# Generated temporary files
+scripts/*.bed
+.nfs*
