@@ -185,7 +185,18 @@ process MERGE_PROCESSED {
 
     script:
     // Batch identifiers are zero-padded, so lexical sorting preserves input order.
-    def ordered = [batch_ids, processed_tsvs].transpose().sort { a, b -> a[0] <=> b[0] }
+    // Nextflow unwraps a singleton path collection to TaskPath, while multiple
+    // paths remain a collection. Normalize both cases before pairing batches.
+    def ids = batch_ids instanceof Collection ? batch_ids : [batch_ids]
+    def tsvs = processed_tsvs instanceof Collection ? processed_tsvs : [processed_tsvs]
+
+    if (ids.size() != tsvs.size()) {
+        throw new IllegalStateException(
+            "Batch ID/file count mismatch: ${ids.size()} IDs, ${tsvs.size()} files"
+        )
+    }
+
+    def ordered = [ids, tsvs].transpose().sort { a, b -> a[0] <=> b[0] }
     def files = ordered.collect { "'${it[1].name}'" }.join(' ')
     """
     set -euo pipefail
