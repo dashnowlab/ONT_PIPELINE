@@ -197,7 +197,6 @@ process ATARVA {
         -f ${ref} \\
         -b ${aln} \\
         -r ${params.atarva_bed} \\
-        --decompose \\
         --strict \\
         --aln-format ${formatArg} \\
         --karyotype ${karyotype} \\

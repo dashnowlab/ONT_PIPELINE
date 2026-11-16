@@ -18,3 +18,5 @@ catalogs/header.tsv
 # Generated temporary files
 scripts/*.bed
 .nfs*
+
+/catalogs/TR_catalog.5599658_loci.20261016_141520.json.gz
