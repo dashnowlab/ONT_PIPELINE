@@ -1,7 +1,7 @@
 #!/bin/bash -l
 #SBATCH --job-name=ont_align
-#SBATCH --partition=amilan
-#SBATCH --qos=normal
+#SBATCH --partition=acpu
+#SBATCH --qos=cpu-normal
 #SBATCH --time=24:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
@@ -344,8 +344,8 @@ process {
     memory = 4.GB
     time = 2.h
 
-    queue = 'amilan'
-    clusterOptions = '--qos=normal'
+    queue = 'acpu'
+    clusterOptions = '--qos=cpu-normal'
 
     /*
      * One retry after the initial failed attempt.

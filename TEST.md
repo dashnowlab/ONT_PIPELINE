@@ -3,8 +3,60 @@
 Run from the cluster. First create the test directories:
 
 ```bash
-mkdir -p /pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/{str,sv,catalog,logs}
+mkdir -p /pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/{data,alignment,human_variation,str,sv,catalog,logs}
 cd /pl/active/dashnowlab/software/ONT_PIPELINE
+```
+
+## Download human APOB FASTQ test data
+
+This small ONT human FASTQ comes from the EPI2ME Cas9/APOB tutorial. It is
+already gzip-compressed and can be passed directly to the alignment pipeline.
+
+```bash
+mkdir -p /pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/data/apob_fastq
+cd /pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/data
+wget -c -O apob_fastq/apob_reads.fastq.gz \
+  'https://ont-exd-int-s3-euwst1-epi2me-labs.s3.amazonaws.com/human_amp_snp_calling/apob_reads.fastq.gz'
+wget -c -O apob_region.bed \
+  'https://ont-exd-int-s3-euwst1-epi2me-labs.s3.amazonaws.com/human_amp_snp_calling/apob_region.bed'
+cd /pl/active/dashnowlab/software/ONT_PIPELINE
+```
+
+## Alignment (`ont_alignment.sh`)
+
+```bash
+sbatch \
+  --output=/pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/logs/ont_align_%j.out \
+  --error=/pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/logs/ont_align_%j.err \
+  ont_alignment.sh \
+  --sample-dir /pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/data/apob_fastq \
+  --reference /pl/active/dashnowlab/data/ref-genomes/human_GRCh38_no_alt_analysis_set.fasta \
+  --output-dir /pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/alignment \
+  --threads 16
+```
+
+## Human variation (`ont_human_variation.sh`)
+
+Run this after alignment completes. The older FASTQ does not provide a reliable
+basecaller-model identifier, so this smoke test runs structural-variant calling
+only. The zero coverage threshold bypasses the whole-genome minimum-coverage
+gate for this small targeted dataset.
+
+```bash
+sbatch \
+  --output=/pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/logs/ont_variation_%j.out \
+  --error=/pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/logs/ont_variation_%j.err \
+  ont_human_variation.sh \
+  --bam /pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/alignment/results/apob_fastq.sorted.aligned.bam \
+  --reference /pl/active/dashnowlab/data/ref-genomes/human_GRCh38_no_alt_analysis_set.fasta \
+  --bed /pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/data/apob_region.bed \
+  --sample-name TEST_APOB \
+  --output-dir /pl/active/dashnowlab/work/ealiyev/SVTR_Analysis/TEST/human_variation \
+  --bam-min-coverage 0 \
+  --no-snp \
+  --no-mod \
+  --no-phased \
+  --no-resume
 ```
 
 ## STR (`long_read_str_v2.nf`)
