@@ -30,6 +30,7 @@ params.atarva_conda      = params.containsKey('atarva_conda')      ? params.atar
 
 // Annotation toolchain
 params.stranno_bin       = params.containsKey('stranno_bin')       ? params.stranno_bin       : "${params.software_dir}/tools/stranno-linux-x86_64-static_0.3.0"
+params.run_lps           = params.containsKey('run_lps')           ? params.run_lps           : true
 params.annotsv_bin       = params.containsKey('annotsv_bin')       ? params.annotsv_bin       : "${params.software_dir}/tools/AnnotSV/bin/AnnotSV"
 params.htssidra_jar      = params.containsKey('htssidra_jar')      ? params.htssidra_jar      : "${params.software_dir}/tools/htsSidra-1.2-jar-with-dependencies.jar"
 params.z_score_script    = params.containsKey('z_score_script')    ? params.z_score_script    : "${params.software_dir}/scripts/z_score_regularized_final.py"
@@ -215,6 +216,8 @@ process PREPARE_VARIANTS {
     output:
     tuple val(sample), path("${sample}.atarva.annotated.z_score.vcf"), path("${sample}.atarva.annotated.z_score.tsv")
     script:
+    def lpsCmd = params.run_lps ? "${params.stranno_bin} lps \"\${filtered_vcf}\" > ${sample}.lps.tsv" : ""
+    def lpsArg = params.run_lps ? "--lps ${sample}.lps.tsv" : ""
     """
     set -euo pipefail
     input_vcf="${vcf}"
@@ -283,10 +286,13 @@ process PREPARE_VARIANTS {
         --max-dist 10 \\
         -o ${sample}.atarva.annotated.vcf
 
+    ${lpsCmd}
+
     python3 ${params.z_score_script} \\
         ${sample}.atarva.annotated.vcf \\
         ${sample} \\
-        ${sample}.atarva.annotated.z_score.vcf
+        ${sample}.atarva.annotated.z_score.vcf \\
+        ${lpsArg}
 
     python3 ${params.vcf_to_tsv_script} \
         -i ${sample}.atarva.annotated.z_score.vcf \
