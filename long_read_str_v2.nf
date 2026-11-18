@@ -364,6 +364,8 @@ process HTSSIDRA {
 process LEFT_JOIN {
     tag "${sample}"
 
+    conda "${params.atarva_conda}"
+
     cpus 2
     memory '8 GB'
     time '4h'
