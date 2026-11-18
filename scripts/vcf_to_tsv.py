@@ -131,6 +131,8 @@ def clean_sample_name(name):
 
 def convert_vcf_to_tsv(vcf_path, out_path, sample_arg=None):
     info_fields, format_fields, sample_names = discover_fields(vcf_path)
+    info_fields = sorted(info_fields)
+    format_fields = sorted(format_fields)
 
     single_sample = (len(sample_names) == 1) or (sample_arg is not None)
     clean_sample = None

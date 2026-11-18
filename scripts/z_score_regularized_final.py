@@ -323,137 +323,25 @@ def get_vcf_motif_and_period(info):
     return motif, period
 
 
-def parse_allele_lengths(al_str):
-    if not al_str or al_str in (".", ".,."):
+def parse_two_values(val_str):
+    if not val_str or val_str in (".", ".,."):
         return float("nan"), float("nan")
-    parts = al_str.split(",")
-    a1 = safe_float(parts[0]) if len(parts) >= 1 else float("nan")
-    a2 = safe_float(parts[1]) if len(parts) >= 2 else a1
-    return a1, a2
+    parts = val_str.split(",")
+    v1 = safe_float(parts[0]) if len(parts) >= 1 else float("nan")
+    v2 = safe_float(parts[1]) if len(parts) >= 2 else v1
+    return v1, v2
 
 
-def load_lps_table(lps_path):
-    """
-    Parses stranno lps output:
-        id                                  motif       <sample>
-        chr1-1435799-1435818-GGCGCGGAGC     GGCGCGGAGC  2,2
-    Builds lookup keys by ID, stripped ID, and coordinates so matching
-    is robust against 'chr' prefix or coordinate conventions.
-    """
-    lps_map = {}
-    if not lps_path:
-        return lps_map
-
-    with open(lps_path, "r", encoding="utf-8") as fin:
-        header = None
-        for line in fin:
-            line = line.strip()
-            if not line:
-                continue
-            cols = line.split("\t")
-            if header is None:
-                header = cols
-                continue
-            if len(cols) < 3:
-                continue
-
-            locus_id = cols[0].strip()
-            motif = cols[1].strip()
-            val = cols[2].strip()
-
-            if val in ("", "."):
-                val = "."
-
-            # Store direct locus ID
-            lps_map[locus_id] = val
-
-            # Split locus_id: e.g. chr1-1435799-1435818-GGCGCGGAGC
-            parts = locus_id.split("-")
-            if len(parts) >= 4:
-                chrom = parts[0]
-                start_str = parts[1]
-                end_str = parts[2]
-                motif_str = "-".join(parts[3:])
-
-                chrom_nochr = chrom[3:] if chrom.startswith("chr") else chrom
-                lps_map[f"{chrom_nochr}-{start_str}-{end_str}-{motif_str}"] = val
-                lps_map[f"chr{chrom_nochr}-{start_str}-{end_str}-{motif_str}"] = val
-
-                try:
-                    s_int = int(start_str)
-                    e_int = int(end_str)
-                    s_0based = str(s_int - 1)
-
-                    # Also store with 0-based start
-                    lps_map[f"{chrom}-{s_0based}-{end_str}-{motif_str}"] = val
-                    lps_map[f"{chrom_nochr}-{s_0based}-{end_str}-{motif_str}"] = val
-
-                    # 1-based and 0-based coordinate keys
-                    lps_map[(chrom, s_int, e_int)] = val
-                    lps_map[(chrom, s_int - 1, e_int)] = val
-                    lps_map[(chrom_nochr, s_int, e_int)] = val
-                    lps_map[(chrom_nochr, s_int - 1, e_int)] = val
-
-                    # Pos-only fallback
-                    if (chrom, s_int) not in lps_map:
-                        lps_map[(chrom, s_int)] = val
-                    if (chrom_nochr, s_int) not in lps_map:
-                        lps_map[(chrom_nochr, s_int)] = val
-                except ValueError:
-                    pass
-
-    return lps_map
-
-
-def get_lps_for_record(rec_fields, info, lps_map):
-    """
-    Finds matching LPS value for a VCF record using ID, INFO tags, or coordinates.
-    """
-    if not lps_map:
-        return None
-
-    chrom = rec_fields[0]
-    chrom_nochr = chrom[3:] if chrom.startswith("chr") else chrom
-    pos_str = rec_fields[1]
-    vid = rec_fields[2]
-    info_id = info.get("ID", "")
-    info_start = info.get("START", "")
-    info_end = info.get("END", "")
-
-    candidates = []
-    if vid and vid != ".":
-        candidates.append(vid)
-    if info_id and info_id != ".":
-        candidates.append(info_id)
-
-    try:
-        pos_int = int(pos_str)
-        if info_end and info_end != ".":
-            end_int = int(info_end)
-            candidates.append((chrom, pos_int, end_int))
-            candidates.append((chrom_nochr, pos_int, end_int))
-
-        if info_start and info_start != "." and info_end and info_end != ".":
-            start_int = int(info_start)
-            end_int = int(info_end)
-            candidates.append((chrom, start_int, end_int))
-            candidates.append((chrom_nochr, start_int, end_int))
-
-        candidates.append((chrom, pos_int))
-        candidates.append((chrom_nochr, pos_int))
-    except ValueError:
-        pass
-
-    for cand in candidates:
-        if cand in lps_map:
-            return lps_map[cand]
-
-    return None
+def get_pop_median(info_dict, pop_prefix, motif_idx):
+    val = get_motif_specific_stat(info_dict, f"stranno_{pop_prefix}_median_adjusted", motif_idx)
+    if math.isnan(val):
+        val = get_motif_specific_stat(info_dict, f"stranno_{pop_prefix}_median", motif_idx)
+    return val
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Annotate VCF with adaptive regularized z-scores and optional LPS."
+        description="Annotate ATaRVa VCF with adaptive regularized z-scores and p-values using ATaRVa LPS and AL."
     )
     parser.add_argument("input_vcf", help="Path to input VCF file")
     parser.add_argument("sample_name", help="Sample name in VCF header")
@@ -462,7 +350,7 @@ def main():
         "--lps",
         default=None,
         required=False,
-        help="Optional path to stranno lps output TSV file"
+        help="Optional/deprecated (LPS values are read directly from ATaRVa FORMAT/LPS)"
     )
 
     args = parser.parse_args()
@@ -470,13 +358,16 @@ def main():
     input_vcf = args.input_vcf
     sample_name = args.sample_name
     output_vcf = args.output_vcf
-    lps_map = load_lps_table(args.lps) if args.lps else {}
 
     new_headers = [
         '##INFO=<ID=TR_MATCHED_MOTIF_INDEX,Number=1,Type=Integer,Description="Selected index in stranno_motif used for count/stat lookup">',
         '##INFO=<ID=TR_MATCHED_MOTIF,Number=1,Type=String,Description="Selected motif from stranno_motif used for count/stat lookup">',
-        '##INFO=<ID=TR_H1_REPCN,Number=1,Type=Float,Description="Allele 1 repeat count from matched stranno_motif_counts or sequence-length fallback">',
-        '##INFO=<ID=TR_H2_REPCN,Number=1,Type=Float,Description="Allele 2 repeat count from matched stranno_motif_counts or sequence-length fallback">',
+        '##INFO=<ID=TR_H1_REPCN,Number=1,Type=Float,Description="Allele 1 repeat count (ATaRVa FORMAT/LPS)">',
+        '##INFO=<ID=TR_H2_REPCN,Number=1,Type=Float,Description="Allele 2 repeat count (ATaRVa FORMAT/LPS)">',
+
+        '##INFO=<ID=LPS,Number=.,Type=String,Description="Longest pure motif repeat count from ATaRVa FORMAT/LPS (e.g. 2,2 or 22,19)">',
+        '##INFO=<ID=TR_H1_LPS,Number=1,Type=Float,Description="Allele 1 longest pure repeat count (LPS) from ATaRVa">',
+        '##INFO=<ID=TR_H2_LPS,Number=1,Type=Float,Description="Allele 2 longest pure repeat count (LPS) from ATaRVa">',
 
         '##INFO=<ID=TR_TENK10K_H1_Z,Number=1,Type=Float,Description="Allele 1 z-score using stranno_tenk10k median/stdev">',
         '##INFO=<ID=TR_TENK10K_H2_Z,Number=1,Type=Float,Description="Allele 2 z-score using stranno_tenk10k median/stdev">',
@@ -508,17 +399,6 @@ def main():
         '##INFO=<ID=TR_HPRC256_TL_H1_PADJ,Number=1,Type=Float,Description="Allele 1 total length BH-adjusted p-value">',
         '##INFO=<ID=TR_HPRC256_TL_H2_PADJ,Number=1,Type=Float,Description="Allele 2 total length BH-adjusted p-value">',
     ]
-
-    if args.lps:
-        new_headers.append(
-            '##INFO=<ID=LPS,Number=.,Type=String,Description="Stranno longest pure stretch per allele (e.g. 2,2 or 15,9)">'
-        )
-        new_headers.append(
-            '##INFO=<ID=TR_H1_LPS,Number=1,Type=Float,Description="Allele 1 longest pure stretch (LPS)">'
-        )
-        new_headers.append(
-            '##INFO=<ID=TR_H2_LPS,Number=1,Type=Float,Description="Allele 2 longest pure stretch (LPS)">'
-        )
 
     meta_lines = []
     header_line = None
@@ -563,32 +443,35 @@ def main():
             motif_idx = None
             matched_motif = None
 
-            lps_h1 = float("nan")
-            lps_h2 = float("nan")
+            # Parse ATaRVa FORMAT/LPS
+            raw_lps = fmt_dict.get("LPS", "")
+            lps_h1, lps_h2 = parse_two_values(raw_lps)
 
-            if lps_map:
-                lps_val = get_lps_for_record(fields, info, lps_map)
-                if lps_val is not None:
-                    info["LPS"] = lps_val
-                    if lps_val not in ("", "."):
-                        parts = lps_val.split(",")
-                        v1 = safe_float(parts[0])
-                        v2 = safe_float(parts[1]) if len(parts) > 1 else v1
-                        if not math.isnan(v1):
-                            lps_h1 = v1
-                            info["TR_H1_LPS"] = fmt_num(lps_h1)
-                        if not math.isnan(v2):
-                            lps_h2 = v2
-                            info["TR_H2_LPS"] = fmt_num(lps_h2)
+            if alleles[0] is None:
+                lps_h1 = float("nan")
+            if alleles[1] is None:
+                lps_h2 = float("nan")
 
-            if args.lps:
-                # Strict LPS mode: no fallback to total length
-                a1_rep = lps_h1
-                a2_rep = lps_h2
-            else:
-                # Standard total repeat count mode
-                a1_rep = get_repeat_count_from_sequence(ref, alt_list, alleles[0], period)
-                a2_rep = get_repeat_count_from_sequence(ref, alt_list, alleles[1], period)
+            if raw_lps and raw_lps not in ("", ".", ".,."):
+                info["LPS"] = raw_lps
+            if not math.isnan(lps_h1):
+                info["TR_H1_LPS"] = fmt_num(lps_h1)
+            if not math.isnan(lps_h2):
+                info["TR_H2_LPS"] = fmt_num(lps_h2)
+
+            # Use ATaRVa LPS as repeat count for z-score and p-value calculation
+            a1_rep = lps_h1
+            a2_rep = lps_h2
+
+            # Fallback only if LPS was completely omitted from FORMAT
+            if math.isnan(a1_rep) and math.isnan(a2_rep) and not raw_lps:
+                if "CN" in fmt_dict:
+                    c1, c2 = parse_two_values(fmt_dict.get("CN", ""))
+                    a1_rep = c1 if alleles[0] is not None else float("nan")
+                    a2_rep = c2 if alleles[1] is not None else float("nan")
+                else:
+                    a1_rep = get_repeat_count_from_sequence(ref, alt_list, alleles[0], period)
+                    a2_rep = get_repeat_count_from_sequence(ref, alt_list, alleles[1], period)
 
             z_values = {
                 "tenk_h1": float("nan"),
@@ -606,25 +489,18 @@ def main():
 
                 if motif_idx is not None:
                     matched_motif = get_pipe_value(info, "stranno_motif", motif_idx)
-                    counts = get_motif_specific_counts(info, motif_idx)
-
-                    if not args.lps and counts is not None:
-                        if alleles[0] is not None and alleles[0] < len(counts):
-                            a1_rep = counts[alleles[0]]
-                        if alleles[1] is not None and alleles[1] < len(counts):
-                            a2_rep = counts[alleles[1]]
 
                     stats = {
                         "tenk": (
-                            get_motif_specific_stat(info, "stranno_tenk10k_median", motif_idx),
+                            get_pop_median(info, "tenk10k", motif_idx),
                             get_motif_specific_stat(info, "stranno_tenk10k_stdev", motif_idx),
                         ),
                         "aou": (
-                            get_motif_specific_stat(info, "stranno_aou1027_median", motif_idx),
+                            get_pop_median(info, "aou1027", motif_idx),
                             get_motif_specific_stat(info, "stranno_aou1027_stdev", motif_idx),
                         ),
                         "hprc": (
-                            get_motif_specific_stat(info, "stranno_hprc256_median", motif_idx),
+                            get_pop_median(info, "hprc256", motif_idx),
                             get_motif_specific_stat(info, "stranno_hprc256_stdev", motif_idx),
                         ),
                     }
@@ -634,7 +510,7 @@ def main():
                         z_values[f"{pop}_h2"] = zscore(a2_rep, med, sd, period)
 
             # Parse Allele Lengths (AL in base pairs) from FORMAT
-            a1_al, a2_al = parse_allele_lengths(fmt_dict.get("AL", ""))
+            a1_al, a2_al = parse_two_values(fmt_dict.get("AL", ""))
             if alleles[0] is None:
                 a1_al = float("nan")
             if alleles[1] is None:
@@ -650,9 +526,7 @@ def main():
             z_tl_h2 = float("nan")
 
             if has_stranno and motif_idx is not None:
-                med_tl = get_motif_specific_stat(info, "stranno_hprc256totallength_median_adjusted", motif_idx)
-                if math.isnan(med_tl):
-                    med_tl = get_motif_specific_stat(info, "stranno_hprc256totallength_median", motif_idx)
+                med_tl = get_pop_median(info, "hprc256totallength", motif_idx)
                 sd_tl = get_motif_specific_stat(info, "stranno_hprc256totallength_stdev", motif_idx)
 
                 tl_diff_thresh = period if (not math.isnan(period) and period > 0) else 1.0

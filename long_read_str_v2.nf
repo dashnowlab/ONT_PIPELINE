@@ -31,13 +31,13 @@ params.left_join_conda   = params.containsKey('left_join_conda')   ? params.left
 
 // Annotation toolchain
 params.stranno_bin       = params.containsKey('stranno_bin')       ? params.stranno_bin       : "${params.software_dir}/tools/stranno-linux-x86_64-static_0.3.0"
-params.run_lps           = params.containsKey('run_lps')           ? params.run_lps           : true
 params.annotsv_bin       = params.containsKey('annotsv_bin')       ? params.annotsv_bin       : "${params.software_dir}/tools/AnnotSV/bin/AnnotSV"
 params.htssidra_jar      = params.containsKey('htssidra_jar')      ? params.htssidra_jar      : "${params.software_dir}/tools/htsSidra-1.2-jar-with-dependencies.jar"
 params.z_score_script    = params.containsKey('z_score_script')    ? params.z_score_script    : "${params.software_dir}/scripts/z_score_regularized_final.py"
 params.vcf_to_bed_script = params.containsKey('vcf_to_bed_script') ? params.vcf_to_bed_script : "${params.software_dir}/scripts/vcf_to_bed.py"
 params.vcf_to_tsv_script = params.containsKey('vcf_to_tsv_script') ? params.vcf_to_tsv_script : "${params.software_dir}/scripts/vcf_to_tsv.py"
 params.left_join_script  = params.containsKey('left_join_script')  ? params.left_join_script  : "${params.software_dir}/scripts/left_join.py"
+params.merge_reports_script = params.containsKey('merge_reports_script') ? params.merge_reports_script : "${params.software_dir}/scripts/merge_reports.py"
 
 if (params.help) {
     log.info """
@@ -218,8 +218,6 @@ process PREPARE_VARIANTS {
     output:
     tuple val(sample), path("${sample}.atarva.annotated.z_score.vcf"), path("${sample}.atarva.annotated.z_score.tsv")
     script:
-    def lpsCmd = params.run_lps ? "${params.stranno_bin} lps \"\${filtered_vcf}\" > ${sample}.lps.tsv" : ""
-    def lpsArg = params.run_lps ? "--lps ${sample}.lps.tsv" : ""
     """
     set -euo pipefail
     input_vcf="${vcf}"
@@ -288,17 +286,14 @@ process PREPARE_VARIANTS {
         --max-dist 10 \\
         -o ${sample}.atarva.annotated.vcf
 
-    ${lpsCmd}
-
     python3 ${params.z_score_script} \\
         ${sample}.atarva.annotated.vcf \\
         ${sample} \\
-        ${sample}.atarva.annotated.z_score.vcf \\
-        ${lpsArg}
+        ${sample}.atarva.annotated.z_score.vcf
 
-    python3 ${params.vcf_to_tsv_script} \
-        -i ${sample}.atarva.annotated.z_score.vcf \
-        -o ${sample}.atarva.annotated.z_score.tsv \
+    python3 ${params.vcf_to_tsv_script} \\
+        -i ${sample}.atarva.annotated.z_score.vcf \\
+        -o ${sample}.atarva.annotated.z_score.tsv \\
         -s ${sample}
     """
 }
@@ -400,7 +395,7 @@ process MERGE_STR_REPORTS {
     tag "${params.projectname}:atarva"
 
     cpus 1
-    memory '1 GB'
+    memory '2 GB'
     time '1h'
     errorStrategy 'terminate'
 
@@ -416,48 +411,8 @@ process MERGE_STR_REPORTS {
     """
     set -euo pipefail
 
-    OUTFILE="${params.projectname}.merged.tsv"
-    rm -f "\${OUTFILE}"
-
-    first_file=true
-    n_files=0
-    expected_header=""
-
-    for tsv in ${final_tsvs}; do
-        [ -n "\${tsv}" ] || continue
-
-        if [ ! -s "\${tsv}" ]; then
-            echo "WARNING: Missing or empty final TSV: \${tsv}" >&2
-            continue
-        fi
-
-        sample="\$(basename "\${tsv}")"
-        sample="\${sample%.atarva.final.tsv}"
-
-        current_header="\$(head -n 1 "\${tsv}")"
-        if [ "\${first_file}" = true ]; then
-            expected_header="\${current_header}"
-            cat "\${tsv}" > "\${OUTFILE}"
-            first_file=false
-        else
-            if [ "\${current_header}" != "\${expected_header}" ]; then
-                echo "ERROR: Header mismatch in \${tsv}" >&2
-                exit 1
-            fi
-            tail -n +2 "\${tsv}" >> "\${OUTFILE}"
-        fi
-
-        n_files=\$((n_files + 1))
-    done
-
-    if [ "\${n_files}" -eq 0 ]; then
-        echo "ERROR: No final TSV files were available to merge" >&2
-        echo "PWD: \$(pwd)" >&2
-        echo "Directory contents:" >&2
-        ls -lah >&2 || true
-        exit 1
-    fi
-
-    echo "Merged \${n_files} final TSV files into: \${OUTFILE}"
+    python3 ${params.merge_reports_script} \\
+        -o "${params.projectname}.merged.tsv" \\
+        ${final_tsvs}
     """
 }
