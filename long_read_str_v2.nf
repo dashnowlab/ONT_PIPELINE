@@ -202,6 +202,7 @@ process ATARVA {
         --strict \\
         --aln-format ${formatArg} \\
         --karyotype ${karyotype} \\
+        --decompose \\
         -o ${sample}.atarva.vcf
     """
 }
