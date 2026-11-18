@@ -25,8 +25,8 @@ params.atarva_bed        = params.containsKey('atarva_bed')        ? params.atar
 params.atarva_json       = params.containsKey('atarva_json')       ? params.atarva_json       : "${params.software_dir}/catalogs/TR_catalog.63_loci.20260327_193020.json.gz"
 
 // Software / envs
-params.atarva_bin        = params.containsKey('atarva_bin')        ? params.atarva_bin        : "/projects/ealiyev@xsede.org/software/anaconda/envs/atarva-0.9.3/bin/atarva"
-params.atarva_conda      = params.containsKey('atarva_conda')      ? params.atarva_conda      : "${params.software_dir}/tools/ATaRVa/environment.yaml"
+params.atarva_bin        = params.containsKey('atarva_bin')        ? params.atarva_bin        : "/projects/ealiyev@xsede.org/software/anaconda/envs/atarva-0.9.5/bin/atarva"
+params.atarva_conda      = params.containsKey('atarva_conda')      ? params.atarva_conda      : "/pl/active/dashnowlab/software/ATaRVa-0.9.5/environment.yaml"
 
 // Annotation toolchain
 params.stranno_bin       = params.containsKey('stranno_bin')       ? params.stranno_bin       : "${params.software_dir}/tools/stranno-linux-x86_64-static_0.3.0"
