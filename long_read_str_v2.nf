@@ -27,6 +27,7 @@ params.atarva_json       = params.containsKey('atarva_json')       ? params.atar
 // Software / envs
 params.atarva_bin        = params.containsKey('atarva_bin')        ? params.atarva_bin        : "/projects/ealiyev@xsede.org/software/anaconda/envs/atarva-0.9.5/bin/atarva"
 params.atarva_conda      = params.containsKey('atarva_conda')      ? params.atarva_conda      : "/pl/active/dashnowlab/software/ATaRVa-0.9.5/environment.yaml"
+params.left_join_conda   = params.containsKey('left_join_conda')   ? params.left_join_conda   : "${params.software_dir}/containers/environment.yaml"
 
 // Annotation toolchain
 params.stranno_bin       = params.containsKey('stranno_bin')       ? params.stranno_bin       : "${params.software_dir}/tools/stranno-linux-x86_64-static_0.3.0"
@@ -365,7 +366,7 @@ process HTSSIDRA {
 process LEFT_JOIN {
     tag "${sample}"
 
-    conda "${params.atarva_conda}"
+    conda "${params.left_join_conda}"
 
     cpus 2
     memory '8 GB'

@@ -1,0 +1,9 @@
+name: ont_pipeline_py
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.11
+  - pandas>=2.0
+  - numpy>=1.24
