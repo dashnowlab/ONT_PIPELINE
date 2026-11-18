@@ -120,13 +120,35 @@ def discover_fields(vcf_path):
     return info_fields, format_fields, sample_names
 
 
-def convert_vcf_to_tsv(vcf_path, out_path):
+def clean_sample_name(name):
+    if not name:
+        return ""
+    for suffix in [".haplotagged", ".merged", ".atarva.final", ".atarva"]:
+        if name.endswith(suffix):
+            name = name[:-len(suffix)]
+    return name
+
+
+def convert_vcf_to_tsv(vcf_path, out_path, sample_arg=None):
     info_fields, format_fields, sample_names = discover_fields(vcf_path)
 
-    fixed_cols = ["#CHROM", "POS", "ID", "REF", "ALT_1", "ALT_2"]
+    single_sample = (len(sample_names) == 1) or (sample_arg is not None)
+    clean_sample = None
+    if sample_arg:
+        clean_sample = clean_sample_name(sample_arg)
+    elif single_sample and sample_names:
+        clean_sample = clean_sample_name(sample_names[0])
+
+    if single_sample and clean_sample:
+        fixed_cols = ["sample", "#CHROM", "POS", "ID", "REF", "ALT_1", "ALT_2"]
+    else:
+        fixed_cols = ["#CHROM", "POS", "ID", "REF", "ALT_1", "ALT_2"]
 
     format_output_cols = []
-    if sample_names:
+    if single_sample:
+        for fmt in format_fields:
+            format_output_cols.append(f"SAMPLE__{fmt}")
+    elif sample_names:
         for sample in sample_names:
             for fmt in format_fields:
                 format_output_cols.append(f"{sample}__{fmt}")
@@ -169,7 +191,10 @@ def convert_vcf_to_tsv(vcf_path, out_path):
             alt_1 = alts[0] if len(alts) >= 1 else "."
             alt_2 = alts[1] if len(alts) >= 2 else "."
 
-            row = [chrom, pos, vid, ref, alt_1, alt_2]
+            if single_sample and clean_sample:
+                row = [clean_sample, chrom, pos, vid, ref, alt_1, alt_2]
+            else:
+                row = [chrom, pos, vid, ref, alt_1, alt_2]
 
             for field in info_fields:
                 row.append(info_dict.get(field, "."))
@@ -206,9 +231,10 @@ def main():
     )
     parser.add_argument("-i", "--input", required=True, help="Input VCF file")
     parser.add_argument("-o", "--output", required=True, help="Output TSV file")
+    parser.add_argument("-s", "--sample", default=None, help="Optional sample name for first column")
     args = parser.parse_args()
 
-    convert_vcf_to_tsv(args.input, args.output)
+    convert_vcf_to_tsv(args.input, args.output, args.sample)
 
 
 if __name__ == "__main__":

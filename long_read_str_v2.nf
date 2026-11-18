@@ -296,7 +296,8 @@ process PREPARE_VARIANTS {
 
     python3 ${params.vcf_to_tsv_script} \
         -i ${sample}.atarva.annotated.z_score.vcf \
-        -o ${sample}.atarva.annotated.z_score.tsv
+        -o ${sample}.atarva.annotated.z_score.tsv \
+        -s ${sample}
     """
 }
 
@@ -382,6 +383,7 @@ process LEFT_JOIN {
     script:
     """
     set -euo pipefail
+    export PYTHONNOUSERSITE=1
 
     python3 ${params.left_join_script} \\
         ${sample_tsv} \\
@@ -433,14 +435,14 @@ process MERGE_STR_REPORTS {
         current_header="\$(head -n 1 "\${tsv}")"
         if [ "\${first_file}" = true ]; then
             expected_header="\${current_header}"
-            awk -v sample="\${sample}" 'BEGIN{OFS="\t"} NR==1 {print "sample", \$0; next} {print sample, \$0}' "\${tsv}" > "\${OUTFILE}"
+            cat "\${tsv}" > "\${OUTFILE}"
             first_file=false
         else
             if [ "\${current_header}" != "\${expected_header}" ]; then
                 echo "ERROR: Header mismatch in \${tsv}" >&2
                 exit 1
             fi
-            awk -v sample="\${sample}" 'BEGIN{OFS="\t"} NR>1 {print sample, \$0}' "\${tsv}" >> "\${OUTFILE}"
+            tail -n +2 "\${tsv}" >> "\${OUTFILE}"
         fi
 
         n_files=\$((n_files + 1))

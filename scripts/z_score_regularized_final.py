@@ -323,6 +323,15 @@ def get_vcf_motif_and_period(info):
     return motif, period
 
 
+def parse_allele_lengths(al_str):
+    if not al_str or al_str in (".", ".,."):
+        return float("nan"), float("nan")
+    parts = al_str.split(",")
+    a1 = safe_float(parts[0]) if len(parts) >= 1 else float("nan")
+    a2 = safe_float(parts[1]) if len(parts) >= 2 else a1
+    return a1, a2
+
+
 def load_lps_table(lps_path):
     """
     Parses stranno lps output:
@@ -489,6 +498,15 @@ def main():
         '##INFO=<ID=TR_HPRC256_H2_P,Number=1,Type=Float,Description="Allele 2 two-sided p-value">',
         '##INFO=<ID=TR_HPRC256_H1_PADJ,Number=1,Type=Float,Description="Allele 1 BH-adjusted p-value">',
         '##INFO=<ID=TR_HPRC256_H2_PADJ,Number=1,Type=Float,Description="Allele 2 BH-adjusted p-value">',
+
+        '##INFO=<ID=TR_H1_AL,Number=1,Type=Float,Description="Allele 1 length in base pairs from FORMAT/AL">',
+        '##INFO=<ID=TR_H2_AL,Number=1,Type=Float,Description="Allele 2 length in base pairs from FORMAT/AL">',
+        '##INFO=<ID=TR_HPRC256_TL_H1_Z,Number=1,Type=Float,Description="Allele 1 total length z-score using stranno_hprc256totallength median/stdev in bp">',
+        '##INFO=<ID=TR_HPRC256_TL_H2_Z,Number=1,Type=Float,Description="Allele 2 total length z-score using stranno_hprc256totallength median/stdev in bp">',
+        '##INFO=<ID=TR_HPRC256_TL_H1_P,Number=1,Type=Float,Description="Allele 1 total length two-sided p-value">',
+        '##INFO=<ID=TR_HPRC256_TL_H2_P,Number=1,Type=Float,Description="Allele 2 total length two-sided p-value">',
+        '##INFO=<ID=TR_HPRC256_TL_H1_PADJ,Number=1,Type=Float,Description="Allele 1 total length BH-adjusted p-value">',
+        '##INFO=<ID=TR_HPRC256_TL_H2_PADJ,Number=1,Type=Float,Description="Allele 2 total length BH-adjusted p-value">',
     ]
 
     if args.lps:
@@ -615,6 +633,34 @@ def main():
                         z_values[f"{pop}_h1"] = zscore(a1_rep, med, sd, period)
                         z_values[f"{pop}_h2"] = zscore(a2_rep, med, sd, period)
 
+            # Parse Allele Lengths (AL in base pairs) from FORMAT
+            a1_al, a2_al = parse_allele_lengths(fmt_dict.get("AL", ""))
+            if alleles[0] is None:
+                a1_al = float("nan")
+            if alleles[1] is None:
+                a2_al = float("nan")
+
+            if not math.isnan(a1_al):
+                info["TR_H1_AL"] = fmt_num(a1_al)
+            if not math.isnan(a2_al):
+                info["TR_H2_AL"] = fmt_num(a2_al)
+
+            # Calculate HPRC256 Total Length (TL in base pairs) z-score
+            z_tl_h1 = float("nan")
+            z_tl_h2 = float("nan")
+
+            if has_stranno and motif_idx is not None:
+                med_tl = get_motif_specific_stat(info, "stranno_hprc256totallength_median_adjusted", motif_idx)
+                if math.isnan(med_tl):
+                    med_tl = get_motif_specific_stat(info, "stranno_hprc256totallength_median", motif_idx)
+                sd_tl = get_motif_specific_stat(info, "stranno_hprc256totallength_stdev", motif_idx)
+
+                tl_diff_thresh = period if (not math.isnan(period) and period > 0) else 1.0
+                tl_min_sd = 0.5 * tl_diff_thresh
+
+                z_tl_h1 = zscore(a1_al, med_tl, sd_tl, period=period, lambda_sd=tl_min_sd, min_sd=tl_min_sd, min_repeat_diff=tl_diff_thresh)
+                z_tl_h2 = zscore(a2_al, med_tl, sd_tl, period=period, lambda_sd=tl_min_sd, min_sd=tl_min_sd, min_repeat_diff=tl_diff_thresh)
+
             rec = {
                 "fields": fields,
                 "info": info,
@@ -622,6 +668,10 @@ def main():
                 "matched_motif": matched_motif,
                 "a1_rep": a1_rep,
                 "a2_rep": a2_rep,
+                "a1_al": a1_al,
+                "a2_al": a2_al,
+                "hprc_tl_h1": z_tl_h1,
+                "hprc_tl_h2": z_tl_h2,
                 **z_values,
             }
 
@@ -634,6 +684,8 @@ def main():
         for pop in ["tenk", "aou", "hprc"]:
             rec[f"p_{pop}_h1"] = norm_sf(rec[f"{pop}_h1"])
             rec[f"p_{pop}_h2"] = norm_sf(rec[f"{pop}_h2"])
+        rec["p_hprc_tl_h1"] = norm_sf(rec["hprc_tl_h1"])
+        rec["p_hprc_tl_h2"] = norm_sf(rec["hprc_tl_h2"])
 
     for pop in ["tenk", "aou", "hprc"]:
         padj_h1 = p_adj_bh([r[f"p_{pop}_h1"] for r in records])
@@ -642,6 +694,12 @@ def main():
         for i, rec in enumerate(records):
             rec[f"padj_{pop}_h1"] = padj_h1[i]
             rec[f"padj_{pop}_h2"] = padj_h2[i]
+
+    padj_tl_h1 = p_adj_bh([r["p_hprc_tl_h1"] for r in records])
+    padj_tl_h2 = p_adj_bh([r["p_hprc_tl_h2"] for r in records])
+    for i, rec in enumerate(records):
+        rec["padj_hprc_tl_h1"] = padj_tl_h1[i]
+        rec["padj_hprc_tl_h2"] = padj_tl_h2[i]
 
     with open(output_vcf, "w") as fout:
         existing_header_ids = set()
@@ -697,6 +755,13 @@ def main():
             info["TR_HPRC256_H2_P"] = fmt_num(rec["p_hprc_h2"])
             info["TR_HPRC256_H1_PADJ"] = fmt_num(rec["padj_hprc_h1"])
             info["TR_HPRC256_H2_PADJ"] = fmt_num(rec["padj_hprc_h2"])
+
+            info["TR_HPRC256_TL_H1_Z"] = fmt_num(rec["hprc_tl_h1"])
+            info["TR_HPRC256_TL_H2_Z"] = fmt_num(rec["hprc_tl_h2"])
+            info["TR_HPRC256_TL_H1_P"] = fmt_num(rec["p_hprc_tl_h1"])
+            info["TR_HPRC256_TL_H2_P"] = fmt_num(rec["p_hprc_tl_h2"])
+            info["TR_HPRC256_TL_H1_PADJ"] = fmt_num(rec["padj_hprc_tl_h1"])
+            info["TR_HPRC256_TL_H2_PADJ"] = fmt_num(rec["padj_hprc_tl_h2"])
 
             rec["fields"][7] = info_to_string(info)
             fout.write("\t".join(rec["fields"]) + "\n")
