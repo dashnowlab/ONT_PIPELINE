@@ -341,7 +341,7 @@ def get_pop_median(info_dict, pop_prefix, motif_idx):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Annotate ATaRVa VCF with adaptive regularized z-scores and p-values using ATaRVa LPS and AL."
+        description="Annotate ATaRVa VCF with adaptive regularized z-scores and p-values using ATaRVa LPS and AL-derived total repeat length."
     )
     parser.add_argument("input_vcf", help="Path to input VCF file")
     parser.add_argument("sample_name", help="Sample name in VCF header")
@@ -392,8 +392,10 @@ def main():
 
         '##INFO=<ID=TR_H1_AL,Number=1,Type=Float,Description="Allele 1 length in base pairs from FORMAT/AL">',
         '##INFO=<ID=TR_H2_AL,Number=1,Type=Float,Description="Allele 2 length in base pairs from FORMAT/AL">',
-        '##INFO=<ID=TR_HPRC256_TL_H1_Z,Number=1,Type=Float,Description="Allele 1 total length z-score using stranno_hprc256totallength median/stdev in bp">',
-        '##INFO=<ID=TR_HPRC256_TL_H2_Z,Number=1,Type=Float,Description="Allele 2 total length z-score using stranno_hprc256totallength median/stdev in bp">',
+        '##INFO=<ID=TR_H1_TL_REPCN,Number=1,Type=Integer,Description="Allele 1 total length in repeat units, calculated as floor(FORMAT/AL divided by motif length)">',
+        '##INFO=<ID=TR_H2_TL_REPCN,Number=1,Type=Integer,Description="Allele 2 total length in repeat units, calculated as floor(FORMAT/AL divided by motif length)">',
+        '##INFO=<ID=TR_HPRC256_TL_H1_Z,Number=1,Type=Float,Description="Allele 1 total length z-score using AL-derived repeat count and stranno_hprc256totallength median/stdev in repeat units">',
+        '##INFO=<ID=TR_HPRC256_TL_H2_Z,Number=1,Type=Float,Description="Allele 2 total length z-score using AL-derived repeat count and stranno_hprc256totallength median/stdev in repeat units">',
         '##INFO=<ID=TR_HPRC256_TL_H1_P,Number=1,Type=Float,Description="Allele 1 total length two-sided p-value">',
         '##INFO=<ID=TR_HPRC256_TL_H2_P,Number=1,Type=Float,Description="Allele 2 total length two-sided p-value">',
         '##INFO=<ID=TR_HPRC256_TL_H1_PADJ,Number=1,Type=Float,Description="Allele 1 total length BH-adjusted p-value">',
@@ -521,7 +523,17 @@ def main():
             if not math.isnan(a2_al):
                 info["TR_H2_AL"] = fmt_num(a2_al)
 
-            # Calculate HPRC256 Total Length (TL in base pairs) z-score
+            # TRExplorer HPRC256:Length is floor(total allele bp / motif bp).
+            # Convert ATaRVa AL to the same repeat-count definition before comparison.
+            a1_tl_repcn = float("nan")
+            a2_tl_repcn = float("nan")
+            if not math.isnan(period) and period > 0:
+                if not math.isnan(a1_al):
+                    a1_tl_repcn = math.floor(a1_al / period)
+                if not math.isnan(a2_al):
+                    a2_tl_repcn = math.floor(a2_al / period)
+
+            # Calculate HPRC256 Total Length z-score in repeat-count units.
             z_tl_h1 = float("nan")
             z_tl_h2 = float("nan")
 
@@ -529,11 +541,11 @@ def main():
                 med_tl = get_pop_median(info, "hprc256totallength", motif_idx)
                 sd_tl = get_motif_specific_stat(info, "stranno_hprc256totallength_stdev", motif_idx)
 
-                tl_diff_thresh = period if (not math.isnan(period) and period > 0) else 1.0
-                tl_min_sd = 0.5 * tl_diff_thresh
+                tl_diff_thresh = 1.0
+                tl_min_sd = 0.5
 
-                z_tl_h1 = zscore(a1_al, med_tl, sd_tl, period=period, lambda_sd=tl_min_sd, min_sd=tl_min_sd, min_repeat_diff=tl_diff_thresh)
-                z_tl_h2 = zscore(a2_al, med_tl, sd_tl, period=period, lambda_sd=tl_min_sd, min_sd=tl_min_sd, min_repeat_diff=tl_diff_thresh)
+                z_tl_h1 = zscore(a1_tl_repcn, med_tl, sd_tl, lambda_sd=tl_min_sd, min_sd=tl_min_sd, min_repeat_diff=tl_diff_thresh)
+                z_tl_h2 = zscore(a2_tl_repcn, med_tl, sd_tl, lambda_sd=tl_min_sd, min_sd=tl_min_sd, min_repeat_diff=tl_diff_thresh)
 
             rec = {
                 "fields": fields,
@@ -544,6 +556,8 @@ def main():
                 "a2_rep": a2_rep,
                 "a1_al": a1_al,
                 "a2_al": a2_al,
+                "a1_tl_repcn": a1_tl_repcn,
+                "a2_tl_repcn": a2_tl_repcn,
                 "hprc_tl_h1": z_tl_h1,
                 "hprc_tl_h2": z_tl_h2,
                 **z_values,
@@ -630,6 +644,8 @@ def main():
             info["TR_HPRC256_H1_PADJ"] = fmt_num(rec["padj_hprc_h1"])
             info["TR_HPRC256_H2_PADJ"] = fmt_num(rec["padj_hprc_h2"])
 
+            info["TR_H1_TL_REPCN"] = fmt_num(rec["a1_tl_repcn"])
+            info["TR_H2_TL_REPCN"] = fmt_num(rec["a2_tl_repcn"])
             info["TR_HPRC256_TL_H1_Z"] = fmt_num(rec["hprc_tl_h1"])
             info["TR_HPRC256_TL_H2_Z"] = fmt_num(rec["hprc_tl_h2"])
             info["TR_HPRC256_TL_H1_P"] = fmt_num(rec["p_hprc_tl_h1"])
