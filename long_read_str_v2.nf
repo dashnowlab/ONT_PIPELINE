@@ -174,8 +174,8 @@ process ATARVA {
 
     conda "${params.atarva_conda}"
 
-    cpus   { 8 * task.attempt }
-    memory { 16.GB * task.attempt }
+    cpus   { 2 * task.attempt }
+    memory { 4.GB * task.attempt }
     time   { 24.h * task.attempt }
     errorStrategy 'retry'
     maxRetries 2
